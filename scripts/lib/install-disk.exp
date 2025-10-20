@@ -1,0 +1,83 @@
+#!/usr/bin/expect -f
+#
+# install-disk.exp
+# Alpine Linux disk installation via serial console
+#
+# This script runs setup-disk to install Alpine to the VM's disk.
+# Must be run after setup-alpine completes.
+#
+# Usage: install-disk.exp
+#
+# Requirements:
+#   - VM running Alpine virt ISO with setup-alpine completed
+#   - Serial console configured as TcpServer on port 4444
+#   - Network and APK repositories already configured
+#
+# Exit codes:
+#   0 - Disk installation completed successfully
+#   1 - Connection or installation failure
+#
+
+set timeout 180
+log_user 1
+
+proc log_step {msg} {
+    puts "\n==> $msg\n"
+}
+
+# Connect to VM serial console
+log_step "Connecting to VM serial console"
+spawn nc localhost 4444
+
+send "\r"
+expect {
+    -re "#" {}
+    timeout {
+        puts "ERROR: Cannot connect to serial console"
+        exit 1
+    }
+}
+
+# Run setup-disk
+log_step "Running setup-disk -m sys /dev/vda"
+send "setup-disk -m sys /dev/vda\r"
+
+# Handle confirmation prompts
+expect {
+    -re "Erase.*\\?" {
+        log_step "Confirming disk erase"
+        send "y\r"
+        exp_continue
+    }
+    -re "Continue\\?" {
+        log_step "Confirming installation"
+        send "y\r"
+        exp_continue
+    }
+    -re "WARNING.*continue\\?" {
+        log_step "Confirming warning"
+        send "y\r"
+        exp_continue
+    }
+    -re "#" {
+        log_step "setup-disk completed"
+    }
+    timeout {
+        puts "ERROR: Disk installation timeout"
+        exit 1
+    }
+}
+
+# Verify disk partitioning
+log_step "Verifying disk installation"
+send "blkid | grep vda\r"
+expect -re "#"
+
+send "fdisk -l /dev/vda | head -20\r"
+expect -re "#"
+
+log_step "Disk installation complete"
+log_step "Next: Remove ISO and reboot to boot from disk"
+
+close
+exit 0

@@ -1,0 +1,113 @@
+# Alpine Linux Answer File Template
+#
+# This file is used by setup-alpine to perform unattended installation.
+# It will be served via HTTP and consumed during the automated template creation.
+#
+# Usage:
+#   The create-alpine-template.sh script automatically:
+#   1. Substitutes %%SSH_KEY%% with your actual SSH public key
+#   2. Serves this file via HTTP on port 8888
+#   3. Passes it to setup-alpine via: setup-alpine -f http://10.0.2.2:8888/answers
+#
+# For manual customization, copy this file and modify as needed.
+#
+
+# Keyboard layout (layout variant)
+# Default: US keyboard
+KEYMAPOPTS="us us"
+
+# Hostname for the VM
+# Default: alpine-template (will be used as the template name)
+# Customize for different templates
+HOSTNAMEOPTS="alpine-template"
+
+# Network interface configuration
+# Uses DHCP on eth0 for automatic IP assignment
+# This works with UTM's Bridged Network mode
+INTERFACESOPTS="auto lo
+iface lo inet loopback
+auto eth0
+iface eth0 inet dhcp"
+
+# DNS options
+# Empty = use DHCP-provided DNS servers
+DNSOPTS=""
+
+# Timezone
+# Default: UTC (recommended for ephemeral VMs)
+# Alternatives: "America/New_York", "Europe/London", etc.
+TIMEZONEOPTS="UTC"
+
+# HTTP/HTTPS proxy
+# Default: none
+# Set if you need proxy access (e.g., "http://proxy:3128")
+PROXYOPTS="none"
+
+# APK repository selection
+# -1 = detect and use fastest mirror automatically
+# Alternatives: -c (CDN), -f (fastest), or specific URL
+APKREPOSOPTS="-1"
+
+# NTP client
+# chrony = recommended lightweight NTP daemon
+# Alternatives: openntpd, busybox-ntpd
+NTPOPTS="chrony"
+
+# SSH server
+# openssh = standard OpenSSH server
+# Required for remote access
+SSHDOPTS="openssh"
+
+# Root SSH public key
+# CRITICAL: This placeholder is replaced by create-alpine-template.sh
+# The script reads ~/.ssh/id_ed25519_alpine_vm.pub and substitutes it here
+# DO NOT manually edit this line - let the script handle substitution
+ROOTSSHKEY="%%SSH_KEY%%"
+
+# Disk setup options
+# -m sys = install to disk (sys mode = traditional disk install)
+# /dev/vda = virtual disk (standard for QEMU/UTM VMs)
+#
+# IMPORTANT: This sets the MODE but does NOT auto-execute disk partitioning.
+# The create-alpine-template.sh script runs setup-disk separately via
+# the install-disk.exp script to handle interactive prompts.
+DISKOPTS="-m sys /dev/vda"
+
+#
+# Additional Notes:
+#
+# 1. Password handling:
+#    - Alpine answer files cannot set root password directly
+#    - The create-alpine-template.sh script sets it via SSH after install:
+#      ssh root@vm "echo 'root:password' | chpasswd"
+#
+# 2. Additional packages:
+#    - Base installation includes minimal packages
+#    - qemu-guest-agent is installed by the script (required for IP detection)
+#    - Additional packages can be added in post-install provisioning
+#
+# 3. Services:
+#    - sshd (OpenSSH) is enabled and started automatically
+#    - chronyd (NTP) is enabled for time synchronization
+#    - qemu-guest-agent is enabled for UTM integration
+#
+# 4. Customization examples:
+#
+#    Different hostname:
+#      HOSTNAMEOPTS="alpine-minimal"
+#
+#    Static IP instead of DHCP:
+#      INTERFACESOPTS="auto lo
+#      iface lo inet loopback
+#      auto eth0
+#      iface eth0 inet static
+#          address 192.168.1.100
+#          netmask 255.255.255.0
+#          gateway 192.168.1.1"
+#
+#    Different timezone:
+#      TIMEZONEOPTS="America/Los_Angeles"
+#
+#    Specific APK mirror:
+#      APKREPOSOPTS="http://dl-cdn.alpinelinux.org/alpine/v3.22/main"
+#

@@ -1,0 +1,20 @@
+# macOS
+.DS_Store
+._*
+
+# Backups
+*.backup
+*.old
+*.utm.tar.gz
+
+# Temporary files
+*.log
+*.tmp
+.http_server_pid
+
+# User-specific
+.ssh_key_path
+.custom_answers
+
+# Never commit VM bundles
+*.utm/
