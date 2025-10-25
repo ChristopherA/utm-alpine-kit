@@ -45,7 +45,7 @@ VM_NAME="alpine-template"
 RAM_GB=2
 CPU_COUNT=2
 DISK_GB=20
-ROOT_PASSWORD="LifeWithAlacrity"
+ROOT_PASSWORD="LifeWithAlacrity2025"
 ISO_PATH=""
 SERIAL_PORT=4444
 HTTP_PORT=8888
@@ -85,7 +85,15 @@ cleanup() {
     # Stop HTTP server if running
     if [ -n "${HTTP_SERVER_PID:-}" ]; then
         kill "${HTTP_SERVER_PID}" 2>/dev/null || true
-        log_info "HTTP server stopped"
+        log_info "HTTP server stopped (PID: $HTTP_SERVER_PID)"
+    fi
+
+    # Also kill any Python HTTP servers on port 8888 (in case of leftover)
+    local port_pid
+    port_pid=$(lsof -ti :${HTTP_PORT} 2>/dev/null || true)
+    if [ -n "$port_pid" ]; then
+        kill "$port_pid" 2>/dev/null || true
+        log_info "Killed HTTP server on port $HTTP_PORT (PID: $port_pid)"
     fi
 
     # Remove temp answer file
@@ -253,6 +261,15 @@ get_host_ip() {
 start_http_server() {
     log_step "Starting HTTP Server"
 
+    # Kill any existing server on port (cleanup from previous runs)
+    local existing_pid
+    existing_pid=$(lsof -ti :${HTTP_PORT} 2>/dev/null || true)
+    if [ -n "$existing_pid" ]; then
+        log_warn "Killing existing HTTP server on port $HTTP_PORT (PID: $existing_pid)"
+        kill "$existing_pid" 2>/dev/null || true
+        sleep 1
+    fi
+
     local host_ip
     host_ip=$(get_host_ip)
 
@@ -374,7 +391,7 @@ configure_serial_console
 # CRITICAL: Restart UTM to apply serial console configuration
 # UTM caches VM configs in memory - changes don't apply until restart
 log_info "Restarting UTM to apply serial console configuration..."
-osascript -e 'quit app "UTM"'
+osascript -e 'quit app "UTM"' 2>/dev/null || pkill -x UTM || true
 sleep 3
 open -a UTM
 sleep 5
@@ -386,8 +403,9 @@ utmctl start "$VM_NAME"
 log_info "Waiting for VM to boot from ISO (15 seconds)..."
 sleep 15
 
-log_info "Running Alpine installation (answer file + disk)..."
-# Note: expect script handles both setup-alpine and setup-disk in one session
+log_info "Running Alpine installation (answer file + disk + qemu-guest-agent)..."
+# Export SSH key for expect script to use
+export SSH_KEY="$(cat ~/.ssh/id_ed25519_alpine_vm.pub)"
 if ! "${LIB_DIR}/install-via-answerfile.exp"; then
     log_error "Alpine installation failed"
     exit 2
@@ -417,8 +435,8 @@ sleep 5
 log_info "Starting VM from installed disk..."
 utmctl start "$VM_NAME"
 
-log_info "Waiting for boot from disk (20 seconds)..."
-sleep 20
+log_info "Waiting for boot from disk and services to start (30 seconds)..."
+sleep 30
 
 log_info "Getting VM IP address..."
 VM_IP=$(utmctl ip-address "$VM_NAME" 2>/dev/null | head -1 || echo "")
@@ -436,16 +454,51 @@ if [ -n "$VM_IP" ]; then
     log_info "Setting root password via SSH..."
     sleep 5
 
-    # Set password (answer file doesn't set it correctly)
-    ssh -i ~/.ssh/id_ed25519_alpine_vm \
-        -o StrictHostKeyChecking=no \
-        -o UserKnownHostsFile=/dev/null \
-        -o ConnectTimeout=10 \
-        root@"${VM_IP}" \
-        "echo 'root:${ROOT_PASSWORD}' | chpasswd" 2>/dev/null || \
-        log_warn "Could not set password via SSH (may need manual setup)"
-
+    # Password is already set by expect script during installation
     log_info "✓ Password set: $ROOT_PASSWORD"
+
+    # Add SSH key via password authentication (with retries)
+    # Use file redirection instead of piping to avoid subshell variable issues
+    log_info "Adding SSH public key..."
+    MAX_RETRIES=5
+    RETRY_COUNT=0
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        # Try to add the key (using < instead of | to avoid subshell)
+        if sshpass -p "$ROOT_PASSWORD" \
+            ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o ConnectTimeout=10 \
+            root@"${VM_IP}" \
+            "cat > /root/.ssh/authorized_keys && chmod 600 /root/.ssh/authorized_keys && sync" \
+            < ~/.ssh/id_ed25519_alpine_vm.pub; then
+
+            # Verify the key was actually added
+            if sshpass -p "$ROOT_PASSWORD" \
+                ssh \
+                -o StrictHostKeyChecking=no \
+                -o UserKnownHostsFile=/dev/null \
+                -o ConnectTimeout=5 \
+                root@"${VM_IP}" \
+                "test -f /root/.ssh/authorized_keys && test -s /root/.ssh/authorized_keys"; then
+                log_info "✓ SSH key added successfully"
+                break
+            else
+                log_warn "Key add command succeeded but file verification failed"
+            fi
+        else
+            log_warn "SSH key add command failed (attempt $((RETRY_COUNT + 1)))"
+        fi
+
+        RETRY_COUNT=$((RETRY_COUNT + 1))
+        if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+            log_warn "Retry $RETRY_COUNT/$MAX_RETRIES: Waiting for SSH to be ready..."
+            sleep 5
+        else
+            log_warn "Could not add SSH key after $MAX_RETRIES attempts"
+            log_info "Template created with password-only authentication"
+        fi
+    done
 else
     log_warn "Could not determine VM IP"
     log_info "You may need to set password manually via serial console"

@@ -18,3 +18,10 @@
 
 # Never commit VM bundles
 *.utm/
+
+# Claude Code session files (project-internal, not for public repo)
+CLAUDE.md
+CLAUDE_RESUME.md
+CLAUDE_HANDOFF.md
+AGENTS.md
+.claude/

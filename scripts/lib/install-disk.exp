@@ -76,7 +76,25 @@ expect -re "#"
 send "fdisk -l /dev/vda | head -20\r"
 expect -re "#"
 
-log_step "Disk installation complete"
+# Install qemu-guest-agent before rebooting
+log_step "Installing qemu-guest-agent for IP detection"
+send "apk add --no-progress qemu-guest-agent\r"
+expect {
+    -re "#" {
+        log_step "qemu-guest-agent installed"
+    }
+    timeout {
+        puts "WARNING: qemu-guest-agent installation timeout"
+    }
+}
+sleep 1
+
+log_step "Enabling qemu-guest-agent service"
+send "rc-update add qemu-guest-agent\r"
+expect -re "#"
+sleep 1
+
+log_step "Disk installation complete (with qemu-guest-agent)"
 log_step "Next: Remove ISO and reboot to boot from disk"
 
 close

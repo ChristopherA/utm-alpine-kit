@@ -51,12 +51,27 @@ APKREPOSOPTS="-1"
 # NTP client
 # chrony = recommended lightweight NTP daemon
 # Alternatives: openntpd, busybox-ntpd
-NTPOPTS="chrony"
+# TEMPORARILY DISABLED to avoid serial console closure during package installation
+# Will install manually if needed after disk installation completes
+NTPOPTS="none"
+
+# APK cache location
+# none = don't cache APK packages (saves space for templates)
+# Alternatives: /media/usb, /media/floppy
+APKCACHEOPTS="none"
 
 # SSH server
 # openssh = standard OpenSSH server
 # Required for remote access
-SSHDOPTS="openssh"
+# TEMPORARILY DISABLED to avoid serial console issues
+# Will install manually after disk installation completes
+#SSHDOPTS="openssh"
+SSHDOPTS="none"
+
+# Root password
+# NOTE: ROOTPASSWORD is NOT supported in Alpine answer files
+# Password must be set via expect script during interactive setup-alpine
+# or via chpasswd after installation
 
 # Root SSH public key
 # CRITICAL: This placeholder is replaced by create-alpine-template.sh
@@ -68,10 +83,10 @@ ROOTSSHKEY="%%SSH_KEY%%"
 # -m sys = install to disk (sys mode = traditional disk install)
 # /dev/vda = virtual disk (standard for QEMU/UTM VMs)
 #
-# IMPORTANT: This sets the MODE but does NOT auto-execute disk partitioning.
-# The create-alpine-template.sh script runs setup-disk separately via
-# the install-disk.exp script to handle interactive prompts.
-DISKOPTS="-m sys /dev/vda"
+# TEMPORARILY DISABLED to avoid serial console closure during disk installation
+# Will run setup-disk manually after setup-alpine completes
+#DISKOPTS="-m sys /dev/vda"
+DISKOPTS="none"
 
 #
 # Additional Notes:

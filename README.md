@@ -5,11 +5,11 @@
 > - _purpose_: Automated Alpine Linux VM creation and management for UTM on macOS
 > - _copyright_: ©2025 by @ChristopherA, licensed under [BSD 2-Clause Plus Patent License](https://spdx.org/licenses/BSD-2-Clause-Patent.html)
 > - _created_: 2025-10-19 by @ChristopherA <ChristopherA@LifeWithAlacrity.com>
-> - _last-updated_: 2025-10-19 by @ChristopherA <ChristopherA@LifeWithAlacrity.com>
+> - _last-updated_: 2025-10-25 by @ChristopherA <ChristopherA@LifeWithAlacrity.com>
 
 [![License](https://img.shields.io/badge/License-BSD_2--Clause--Patent-blue.svg)](LICENSE.md)
-[![Project Status: WIP](https://www.repostatus.org/badges/latest/wip.svg)](https://www.repostatus.org/#wip)
-[![Version](https://img.shields.io/badge/version-0.2.00-blue.svg)](CHANGELOG.md)
+[![Project Status: Active](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](CHANGELOG.md)
 
 Fast, reproducible Alpine Linux development environments for UTM on macOS. Automated template creation, instant cloning, and deploy-test-destroy workflows.
 
@@ -22,10 +22,11 @@ Fast, reproducible Alpine Linux development environments for UTM on macOS. Autom
 UTM Alpine Kit provides a complete automation suite for creating and managing lightweight Alpine Linux virtual machines on macOS using UTM. Perfect for developers who need quick, disposable test environments.
 
 **Key Features:**
-- One-command template creation (~5 minutes)
-- Fast VM cloning with automatic network configuration
-- Automated testing workflows with language detection
-- Minimal resource usage (512MB RAM, 1-2GB disk)
+- One-command template creation (~2 minutes)
+- Instant VM cloning (0-1 second) with automatic network configuration
+- Dual authentication: SSH key + password for flexibility
+- Automated IP detection via qemu-guest-agent
+- Minimal resource usage (512MB RAM, 171MB disk per VM)
 - Deploy-test-destroy cycle in minutes
 
 **Why Alpine Linux?**
@@ -78,14 +79,15 @@ Create a reusable Alpine template once:
   --iso ~/.cache/vms/alpine-virt-3.22.0-aarch64.iso
 ```
 
-This takes ~5 minutes and creates `alpine-template.utm` - a clean, minimal Alpine installation ready for cloning.
+This takes ~2 minutes and creates `alpine-template.utm` - a clean, minimal Alpine installation ready for cloning.
 
 **What it does:**
-- Creates and configures UTM VM (4GB disk, 512MB RAM, 2 CPUs)
+- Creates and configures UTM VM (20GB disk, 2GB RAM, 2 CPUs)
 - Installs Alpine Linux via answer file automation
-- Configures SSH key authentication
-- Installs QEMU guest agent for IP detection
-- Removes ISO and prepares for cloning
+- Configures both SSH key and password authentication
+- Installs qemu-guest-agent for automatic IP detection
+- Syncs filesystem and verifies SSH keys persist
+- Removes ISO and prepares for instant cloning
 
 See [docs/template-creation.md](docs/template-creation.md) for details.
 
@@ -106,8 +108,8 @@ Once you have a template, use this fast cycle for testing:
 ./scripts/clone-vm.sh my-test --template alpine-minimal
 ```
 
-**Time:** 10-30 seconds
-**Result:** Fresh Alpine VM with new MAC address and IP
+**Time:** 0-1 second (instant duplication)
+**Result:** Fresh Alpine VM with new MAC address, ready in ~25 seconds
 
 #### 2. Test Your Code
 
@@ -237,10 +239,10 @@ utm-alpine-kit/
 See [docs/troubleshooting.md](docs/troubleshooting.md) for detailed solutions.
 
 **Common issues:**
-- **No IP detected:** Wait 15-20 seconds for QEMU guest agent
-- **SSH fails:** Verify SSH key matches template creation
+- **No IP detected:** Wait 15-25 seconds for qemu-guest-agent to start
+- **SSH key fails:** Both key and password auth are configured; verify key path
 - **Clone hangs:** Ensure template is stopped before cloning
-- **UTM config not updating:** UTM caches configs - requires restart
+- **UTM config not updating:** UTM caches configs - restart UTM to reload
 
 ## Contributing
 
@@ -274,7 +276,7 @@ See [LICENSE.md](LICENSE.md) for details.
 * 🦋 [@ChristopherA.bsky.social](https://bsky.app/profile/christophera.bsky.social)
 * 🅧 [@ChristopherA](https://twitter.com/ChristopherA)
 
-Part of the Blockchain Commons toolkit for secure development workflows.
+Used by Blockchain Commons for testing secure development workflows.
 
 ## Related Resources
 

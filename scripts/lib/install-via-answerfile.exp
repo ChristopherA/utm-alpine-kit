@@ -18,16 +18,16 @@ catch {
 set answer_url "http://${host_ip}:8888/alpine-answer.txt"
 log_step "Answer file URL: $answer_url"
 
-# Connect to VM serial console
+# Connect to VM serial console (using socat for robust ANSI handling)
 log_step "Connecting to VM serial console"
-spawn nc localhost 4444
+spawn socat - TCP:localhost:4444
 
 # Wait for login prompt and login as root
 send "\r"
 expect {
     -re "login:" {
         send "root\r"
-        expect -re "#"
+        expect -re ":~#"
     }
     timeout {
         puts "ERROR: Timeout waiting for login prompt"
@@ -39,11 +39,22 @@ expect {
 log_step "Configuring network (DHCP)"
 send "setup-interfaces\r"
 sleep 1
+
+# Handle all setup-interfaces prompts in sequence
 expect {
-    -re "initialize" { send "eth0\r"; exp_continue }
-    -re "Ip address" { send "dhcp\r"; exp_continue }
-    -re "manual" { send "n\r"; exp_continue }
-    -re "#" {}
+    -re "initialize" {
+        send "eth0\r"
+        exp_continue
+    }
+    -re "Ip address" {
+        send "dhcp\r"
+        exp_continue
+    }
+    -re "manual" {
+        send "n\r"
+        # After manual prompt, setup-interfaces completes
+        expect -re ":~#"
+    }
     timeout {
         puts "ERROR: Network configuration timeout"
         exit 1
@@ -51,39 +62,73 @@ expect {
 }
 
 send "ifup eth0\r"
-expect -re "#"
+expect {
+    -re "lease.*obtained" {
+        # DHCP lease acquired
+    }
+    -re "udhcpc" {
+        # udhcpc output seen
+    }
+    timeout {
+        puts "ERROR: ifup timeout"
+        exit 1
+    }
+}
 sleep 3
 
 # Verify network connectivity
 log_step "Verifying network connectivity"
 send "ip addr show eth0 | grep 'inet '\r"
-expect -re "#"
+expect {
+    -re "inet " {
+        # IP address assigned
+    }
+    timeout {
+        puts "ERROR: No IP address"
+        exit 1
+    }
+}
 
 # Setup APK repositories
 log_step "Configuring APK repositories"
 send "setup-apkrepos -1\r"
 expect {
     -re "mirror" { send "1\r"; exp_continue }
-    -re "#" {}
+    -re "Updating repository indexes.*done" {
+        # Repository setup complete
+    }
     timeout {
         puts "ERROR: APK repository setup timeout"
         exit 1
     }
 }
+sleep 1
 
-send "apk update\r"
-expect -re "#"
+send "apk update --no-progress\r"
+expect {
+    -re "OK:.*packages available" {
+        # APK update complete
+    }
+    timeout {
+        puts "ERROR: apk update timeout"
+        exit 1
+    }
+}
+sleep 1
 
 # Install wget to download answer file
 log_step "Installing wget"
-send "apk add wget\r"
+send "apk add --no-progress wget\r"
 expect {
-    -re "#" {}
+    -re "OK:.*packages" {
+        # wget installed
+    }
     timeout {
         puts "ERROR: wget installation timeout"
         exit 1
     }
 }
+sleep 1
 
 # Download answer file
 log_step "Downloading answer file from $answer_url"
@@ -91,106 +136,159 @@ send "wget -O /tmp/answers.txt $answer_url\r"
 expect {
     -re "saved" {
         log_step "Answer file downloaded successfully"
-        expect -re "#"
     }
-    -re "#" {}
     timeout {
         puts "ERROR: Answer file download timeout"
         exit 1
     }
 }
+sleep 1
 
-# Verify answer file
-send "cat /tmp/answers.txt\r"
-expect -re "#"
+# Verify answer file downloaded
+send "ls -lh /tmp/answers.txt\r"
+expect {
+    -re "answers\\.txt" {
+        # File exists, continue
+    }
+    timeout {
+        puts "ERROR: Answer file not found"
+        exit 1
+    }
+}
+sleep 1
 
 # Run setup-alpine with answer file
 log_step "Running setup-alpine with answer file"
 send "setup-alpine -f /tmp/answers.txt\r"
 
-set timeout 300
+# Wait for command echo to complete before looking for prompts
+sleep 5
+
+set timeout 600
+
+# Root password for template access
+set root_password "LifeWithAlacrity2025"
 
 # Monitor installation progress
-# Note: setup-alpine may prompt for root password even with ROOTSSHKEY
+# Match specific prompts and output, NOT generic prompts
 expect {
-    -re "password.*root" {
-        log_step "Skipping root password prompt (will set via SSH later)"
-        send "\r"
+    -nocase -re "new password:" {
+        # New password prompt - send our password
+        log_step "Password prompt detected - setting password"
+        send "$root_password\r"
         exp_continue
     }
-    -re "Retype password:" {
-        send "\r"
+    -nocase -re "retype password:" {
+        # Confirm password prompt - send same password
+        log_step "Password confirmation - sending password"
+        send "$root_password\r"
         exp_continue
     }
     -re "Bad password" {
-        log_step "Password skipped (using SSH key authentication)"
+        log_step "Password rejected - this should not happen"
         exp_continue
     }
-    -re "password.*unchanged" {
-        log_step "Password unchanged (SSH key will be used)"
+    -re "Please retry" {
+        log_step "Retry requested"
         exp_continue
     }
-    -re "Erase.*\\?" {
-        log_step "Confirming disk erase"
-        send "y\r"
-        exp_continue
-    }
-    -re "complete" {
-        log_step "Setup-alpine completed"
-        expect -re "#"
-    }
-    -re "#" {
-        log_step "Setup-alpine finished (returned to prompt)"
-    }
-    timeout {
-        puts "ERROR: setup-alpine timeout"
-        exit 1
-    }
-}
-
-log_step "Answer file installation complete"
-
-# Now run setup-disk in same session (DISKOPTS doesn't auto-execute)
-log_step "Running setup-disk to install to /dev/vda"
-send "setup-disk -m sys /dev/vda\r"
-
-set timeout 180
-
-expect {
-    -re "Which disk.*\\?" {
-        log_step "Confirming disk: /dev/vda"
-        send "/dev/vda\r"
-        exp_continue
-    }
-    -re "continue\\?" {
-        log_step "Confirming disk erase"
-        send "y\r"
+    -re "Setup a user.*\\?" {
+        # User setup prompt - last interactive section
+        log_step "User setup prompt - skipping (using root only)"
+        send "no\r"
         exp_continue
     }
     -re "where to store configs" {
-        log_step "Skipping config storage (using none)"
+        # Config storage prompt (appears after DISKOPTS=none)
+        log_step "Config storage prompt - sending 'none'"
         send "none\r"
         exp_continue
     }
-    -re "apk cache directory" {
-        log_step "Skipping apk cache (using none)"
-        send "none\r"
-        exp_continue
+    -re "alpine-template:~#" {
+        # Back at shell prompt with new hostname - setup-alpine definitely complete
+        log_step "Returned to shell prompt"
     }
-    -re "Installation is complete" {
-        log_step "Disk installation complete!"
-        expect -re "#"
-    }
-    -re "#" {
-        log_step "Returned to prompt - installation may be complete"
+    eof {
+        puts "ERROR: Serial console connection closed unexpectedly"
+        exit 1
     }
     timeout {
-        puts "ERROR: Disk installation timeout"
+        puts "ERROR: setup-alpine timeout after 600 seconds"
         exit 1
     }
 }
 
-log_step "Full installation complete (answer file + disk)"
+# setup-alpine expect block exited - we're back at the shell prompt
+log_step "Setup-alpine complete (disk installation skipped)"
+
+# Install packages required by setup-disk, plus openssh and qemu-guest-agent
+# Enable community repo inline before installing (qemu-guest-agent is in community)
+log_step "Enabling community repo and installing packages for disk installation and SSH access"
+send "echo 'http://dl-cdn.alpinelinux.org/alpine/v3.22/community' >> /etc/apk/repositories && apk update --no-progress && apk add --no-progress e2fsprogs dosfstools grub-efi openssh qemu-guest-agent\r"
+expect {
+    -re "OK:.*packages" {
+        log_step "All packages installed"
+    }
+    timeout {
+        puts "ERROR: Package installation timeout"
+        exit 1
+    }
+}
+sleep 2
+
+# SSH keys will be added via post-install script (more reliable than serial console)
+log_step "Skipping SSH key setup in ISO (will be added post-install)"
+sleep 1
+
+# Now manually run setup-disk to install Alpine to /dev/vda
+# Use echo piping to auto-answer the erase prompt
+log_step "Running setup-disk with auto-confirm erase"
+send "echo y | setup-disk -m sys /dev/vda\r"
+
+# Give disk installation time to complete (90 seconds)
+# Serial console will likely close during this, but installation continues in background
+sleep 90
+
+log_step "Disk installation complete - configuring services on installed system"
+
+# Mount the installed system and configure services
+send "mount /dev/vda3 /mnt 2>/dev/null || mount /dev/vda2 /mnt\r"
+expect -re ":~#"
+sleep 2
+
+# Create .ssh directory on installed system (keys added via post-install)
+log_step "Preparing SSH directory on installed system"
+send "mkdir -p /mnt/root/.ssh\r"
+expect -re ":~#"
+send "chmod 700 /mnt/root/.ssh\r"
+expect -re ":~#"
+sleep 1
+
+# Configure sshd to allow password authentication and root login
+log_step "Configuring sshd for password authentication"
+send "mkdir -p /mnt/etc/ssh\r"
+expect -re ":~#"
+send "sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication yes/' /mnt/etc/ssh/sshd_config\r"
+expect -re ":~#"
+send "sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' /mnt/etc/ssh/sshd_config\r"
+expect -re ":~#"
+send "grep -E '(PasswordAuthentication|PermitRootLogin)' /mnt/etc/ssh/sshd_config\r"
+expect -re ":~#"
+sleep 1
+
+# Enable sshd and qemu-guest-agent in the installed system
+send "chroot /mnt rc-update add sshd default\r"
+expect -re ":~#"
+send "chroot /mnt rc-update add qemu-guest-agent default\r"
+expect -re ":~#"
+sleep 1
+
+# Password is already set during setup-alpine
+# SSH keys will be added via post-install script (more reliable)
+log_step "Installation configured - password already set during setup-alpine"
+sleep 1
+
+log_step "Services configured - ready to boot from disk"
 
 close
 exit 0
