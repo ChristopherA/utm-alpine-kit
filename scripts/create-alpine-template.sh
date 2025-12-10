@@ -176,6 +176,15 @@ validate_prerequisites() {
         log_info "✓ utmctl available"
     fi
 
+    # Check socat
+    if ! command -v socat &>/dev/null; then
+        log_error "socat not found"
+        log_info "Install with: brew install socat"
+        ((errors++))
+    else
+        log_info "✓ socat installed"
+    fi
+
     # Check expect
     if ! command -v expect &>/dev/null; then
         log_error "expect not found"
@@ -184,6 +193,16 @@ validate_prerequisites() {
     else
         log_info "✓ expect installed"
     fi
+
+    # Check sshpass
+    if ! command -v sshpass &>/dev/null; then
+        log_error "sshpass not found"
+        log_info "Install with: brew install sshpass"
+        ((errors++))
+    else
+        log_info "✓ sshpass installed"
+    fi
+
 
     # Check ISO
     if [ -z "$ISO_PATH" ]; then
