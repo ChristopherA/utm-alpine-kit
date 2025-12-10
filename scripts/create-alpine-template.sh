@@ -16,6 +16,7 @@
 #   --cpu N          CPU cores (default: 2)
 #   --disk GB        Disk size in GB (default: 20)
 #   --password PWD   Root password (default: LifeWithAlacrity)
+#   --network MODE   Network mode (default: bridged)
 #   --help           Show this help
 #
 # Requirements:
@@ -47,6 +48,7 @@ CPU_COUNT=2
 DISK_GB=20
 ROOT_PASSWORD="LifeWithAlacrity2025"
 ISO_PATH=""
+NETWORK_MODE="bridged"
 SERIAL_PORT=4444
 HTTP_PORT=8888
 
@@ -132,6 +134,10 @@ parse_args() {
                 ;;
             --password)
                 ROOT_PASSWORD="$2"
+                shift 2
+                ;;
+            --network)
+                NETWORK_MODE="$2"
                 shift 2
                 ;;
             --help)
@@ -332,7 +338,7 @@ create_vm() {
     osascript <<EOF
 tell application "UTM"
     set iso to POSIX file "$ISO_PATH"
-    set vm to make new virtual machine with properties {backend:qemu, configuration:{name:"$VM_NAME", architecture:"aarch64", memory:$(( RAM_GB * 1024 )), cpu cores:$CPU_COUNT, drives:{{removable:true, source:iso}, {guest size:$(( DISK_GB * 1024 ))}}, network interfaces:{{mode:bridged}}, displays:{{hardware:"virtio-gpu-gl-pci"}}}}
+    set vm to make new virtual machine with properties {backend:qemu, configuration:{name:"$VM_NAME", architecture:"aarch64", memory:$(( RAM_GB * 1024 )), cpu cores:$CPU_COUNT, drives:{{removable:true, source:iso}, {guest size:$(( DISK_GB * 1024 ))}}, network interfaces:{{mode:$NETWORK_MODE}}, displays:{{hardware:"virtio-gpu-gl-pci"}}}}
     return name of vm
 end tell
 EOF
