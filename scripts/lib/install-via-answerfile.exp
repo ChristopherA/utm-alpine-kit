@@ -74,13 +74,13 @@ expect {
         exit 1
     }
 }
-sleep 3
+sleep 6
 
 # Verify network connectivity
 log_step "Verifying network connectivity"
-send "ip addr show eth0 | grep 'inet '\r"
+send "ip addr show eth0 | grep 'inet6 '\r"
 expect {
-    -re "inet " {
+    -re "inet6 " {
         # IP address assigned
     }
     timeout {
