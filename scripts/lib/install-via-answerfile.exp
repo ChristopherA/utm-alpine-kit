@@ -78,8 +78,11 @@ sleep 6
 
 # Verify network connectivity
 log_step "Verifying network connectivity"
-send "ip addr show eth0 | grep 'inet6 '\r"
+send "ip addr show eth0 | grep 'inet \|inet6 '\r"
 expect {
+    -re "inet " {
+        # IP address assigned
+    }
     -re "inet6 " {
         # IP address assigned
     }
