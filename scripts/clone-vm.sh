@@ -8,9 +8,10 @@
 #   new-vm-name     Name for the cloned VM
 #
 # Options:
-#   --template NAME   Template to clone from (default: alpine-template)
+#   --template NAME  Template to clone from (default: alpine-template)
 #   --ram SIZE       RAM in GB (default: template's value)
 #   --cpu COUNT      CPU cores (default: template's value)
+#   --ssh FILENAME   Filename of SSH key (default: id_ed25519_alpine_vm)
 #   --help           Show this help message
 #
 # Examples:
@@ -34,7 +35,7 @@ NEW_VM_NAME=""
 NEW_RAM_GB=""
 NEW_CPU_COUNT=""
 UTM_DOCS="$HOME/Library/Containers/com.utmapp.UTM/Data/Documents"
-SSH_KEY="id_ed25519_alpine_vm"
+SSH_KEY_NAME="id_ed25519_alpine_vm"
 
 # Parse arguments
 show_help() {
@@ -50,7 +51,7 @@ Options:
   --template NAME  Template to clone from (default: alpine-template)
   --ram SIZE       RAM in GB (default: template's value)
   --cpu COUNT      CPU cores (default: template's value)
-  --ssh-key NAME   Filename to use for ssh key (default: id_ed25519_alpine_vm)
+  --ssh FILENAME   Filename to use for ssh key (default: id_ed25519_alpine_vm)
   --help           Show this help message
 
 Examples:
@@ -86,7 +87,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         --ssh)
-            SSH_KEY="$2"
+            SSH_KEY_NAME="$2"
             shift 2
             ;;
         -*)
@@ -250,7 +251,7 @@ else
     # Test SSH
     echo ""
     echo "Testing SSH connectivity..."
-    if ssh -i ~/.ssh/${SSH_KEY} -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@$VM_IP "echo 'SSH OK'" &>/dev/null; then
+    if ssh -i ~/.ssh/${SSH_KEY_NAME} -o ConnectTimeout=5 -o StrictHostKeyChecking=no root@$VM_IP "echo 'SSH OK'" &>/dev/null; then
         echo "SSH verified"
     else
         echo "Warning: SSH not responding (may need more time)"
@@ -269,10 +270,10 @@ if [[ -n "$VM_IP" ]]; then
     echo "Next steps:"
     echo ""
     echo "  SSH into VM:"
-    echo "    ssh -i ~/.ssh/$SSH_KEY root@$VM_IP"
+    echo "    ssh -i ~/.ssh/$SSH_KEY_NAME root@$VM_IP"
     echo ""
     echo "  Update and test:"
-    echo "    ssh -i ~/.ssh/$SSH_KEY root@$VM_IP 'apk update && apk upgrade'"
+    echo "    ssh -i ~/.ssh/$SSH_KEY_NAME root@$VM_IP 'apk update && apk upgrade'"
     echo ""
     echo "  Destroy when done:"
     echo "    ./scripts/destroy-vm.sh $NEW_VM_NAME"
